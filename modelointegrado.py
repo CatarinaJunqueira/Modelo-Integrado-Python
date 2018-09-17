@@ -2,13 +2,13 @@
 
 from __future__ import print_function
 from scipy.io import loadmat
+from connect_ifttt import email_alert
 import numpy as np
 import cplex
-from compare_models import compare_models
+#from compare_models import compare_models
 #def b[i][j][n][t]
 
 def ModeloIntegrado(casename):
-    
     
     data = loadmat(casename)
     C = data['C'][0][0]
@@ -26,8 +26,10 @@ def ModeloIntegrado(casename):
         
     for o in range(Npatios):
         for d in range(P):
-            phi[o][d] = phi[o][d].tolist()[0]         
-            
+            if phi[o][d].shape[1] != 0 :
+                phi[o][d] = phi[o][d].tolist()[0]         
+            else:
+                phi[o][d] = []
     
     
     N=[ 0 for i in range(Npatios) ] # N = quantidade de conteineres em cada patio
@@ -46,6 +48,7 @@ def ModeloIntegrado(casename):
     
     
     model = cplex.Cplex()
+    start_time = model.get_time()
     model.objective.set_sense(model.objective.sense.minimize)
     
     #------------------------------------------------------------#
@@ -91,12 +94,46 @@ def ModeloIntegrado(casename):
     model = restricao_N4(model,P,R,C)
     
     #model.write("model_python.lp")
+    
+   # histogram = model.variables.get_histogram()
+   # histogram = np.sum(CHist,axis=1)
+  #  print(histogram)
+    
+    variaveis = model.variables.get_num()
+    print('Numero de Variaveis = ',variaveis)
+    
+    restricoes = model.linear_constraints.get_num()
+    print('Numero de Restricoes = ',restricoes)
+    
+    z = 'No modelo ha %s variaveis e %s restricoes' %(variaveis,restricoes)
+        
+    out_file = open("Resultados.txt",'w+')
+   
+    model.set_results_stream(out_file)
+   
+    #model.set_results_stream("Resultados_InstanciaModeloIntegrado_II.txt")
+    
     model.solve()
     
-    print('\nSolution status = ',model.solution.get_status_string())
-    print('Valor da Funcao Objetivo: ', model.solution.get_objective_value())
-
+    out_file.seek(0)
+    out_string =out_file.read()
+    out_file.close()
     
+    print(out_string)
+   
+    end_time = model.get_time()
+    solvetime = end_time-start_time
+   # print('Duracao = ',solvetime)
+    
+    status = model.solution.get_status_string()
+    fobj = model.solution.get_objective_value()
+    
+    print('\nSolution status = ',status)
+    print('Valor da Funcao Objetivo: ',fobj )
+    
+    Y = ' Solution status: %s  <br> Valor da Funcao Objetivo: %s  <br> Duracao: %s <br>' %(status,fobj,solvetime)
+   
+    email_alert(Y, z, out_string)
     return model
 
 #------------------------------------------------------------------------------------------------------------------#
@@ -1067,6 +1104,6 @@ def restricao_N4(model,P,R,C):
     return model    
 
 if __name__ == "__main__":
-     model1 = ModeloIntegrado('InstanciaArtigo_II.mat')
+     model1 = ModeloIntegrado('InstanciaModeloIntegrado_I.mat')
      #model2 = cplex.Cplex("model_Matlab_Inst_II.lp")
      #compare_models(model1,model2)
